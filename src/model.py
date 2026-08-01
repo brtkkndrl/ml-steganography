@@ -3,55 +3,93 @@ import torch
 import lightning as L
 import torch.nn.functional as F
 
-class PrepNetwork(nn.Module):
-    def __init__(self, C_in=1, C_out=3):
-        super().__init__()
+# class PrepNetwork(nn.Module):
+#     def __init__(self, C_in=1, C_out=256):
+#         super().__init__()
 
-        self.net = nn.Sequential(
-            nn.ConvTranspose2d(C_in, C_in, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
+#         self.net = nn.Sequential(
+#             nn.Conv2d(C_in, 32, kernel_size=3, stride=2, padding=1), # 128 -> 64
+#             nn.ReLU(),
 
-            nn.Conv2d(C_in, 32, kernel_size=3, padding=1),
-            nn.ReLU(),
+#             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1), # 64 -> 32
+#             nn.ReLU(),
 
-            nn.Conv2d(32, 64, kernel_size=5, padding=2),
-            nn.ReLU(),
+#             nn.Conv2d(64, 128, kernel_size=3, padding=1),
+#             nn.ReLU(),
 
-            nn.Conv2d(64, 32, kernel_size=7, padding=3),
-            nn.ReLU(),
+#             nn.Conv2d(128, C_out, kernel_size=1),
+#         )
 
-            nn.Conv2d(32, C_out, kernel_size=1),
-        )
-
-    def forward(self, x):
-        return self.net(x)
+#     def forward(self, x):
+#         return self.net(x)
 
 class HidingNetwork(nn.Module):
     def __init__(self):
         super().__init__()
 
-        C_prep = 16
+        C_secret_prep = 64
+        C_cover_prep = 64
 
-        self.prep_network = PrepNetwork(C_out=C_prep)
+        self.cover_prep_1 = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1), # 256 -> 128
+            nn.ReLU(),
+        )
 
-        self.net = nn.Sequential(
-            nn.Conv2d(3+C_prep, 64, kernel_size=3, padding=1),
+        self.cover_prep_2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1), # 128 -> 64
+            nn.ReLU(),
+        )
+
+        self.cover_prep_3 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1), # 64 -> 32
             nn.ReLU(),
 
-            nn.Conv2d(64, 64, kernel_size=5, padding=2),
+            nn.Conv2d(128, C_cover_prep, kernel_size=1),
+        )
+
+        self.secret_prep_net = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1), # 128 -> 64
             nn.ReLU(),
 
-            nn.Conv2d(64, 64, kernel_size=7, padding=3),
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1), # 64 -> 32
             nn.ReLU(),
 
-            nn.Conv2d(64, 3, kernel_size=1, padding=0),
-            nn.Sigmoid()
+            nn.Conv2d(64, C_secret_prep, kernel_size=1),
+        )
+
+        self.decoder_1 = nn.Sequential(
+            nn.ConvTranspose2d(C_secret_prep + C_cover_prep,
+                                64, kernel_size=4, stride=2, padding=1), # 32 -> 64
+            nn.ReLU(),
+        )
+
+        self.decoder_2 = nn.Sequential(
+            nn.ConvTranspose2d(64 + 64, 32, kernel_size=4, stride=2, padding=1), # 64 -> 128 (+cover_prep_2 skip)
+            nn.ReLU(),
+        )
+
+        self.decoder_3 = nn.Sequential(
+            nn.ConvTranspose2d(32 + 32, 3, kernel_size=4, stride=2, padding=1), # 128 -> 256 (+cover_prep_1 skip)
+            nn.Sigmoid(),
         )
 
     def forward(self, x_cover, x_secret):
-        x_prepped = self.prep_network(x_secret)
-        x = torch.cat([x_cover, x_prepped], dim=1)
-        return self.net(x)
+        c1 = self.cover_prep_1(x_cover)   # 128x128x32
+        c2 = self.cover_prep_2(c1)        # 64x64x64
+        c3 = self.cover_prep_3(c2)        # 32x32xC_cover_prep
+
+        s = self.secret_prep_net(x_secret)  # 32x32xC_secret_prep
+
+        x = torch.cat([c3, s], dim=1)
+        x = self.decoder_1(x)               # 64x64x64
+
+        x = torch.cat([x, c2], dim=1)
+        x = self.decoder_2(x)               # 128x128x32
+
+        x = torch.cat([x, c1], dim=1)
+        x = self.decoder_3(x)               # 256x256x3
+
+        return x
 
 
 class RecoveryNetwork(nn.Module):
@@ -129,14 +167,14 @@ class SteganographyModel(L.LightningModule):
         opt_d.step()
 
         # Generator step
-        logits_d = self.discriminator_network(stego)
-        loss_d = F.binary_cross_entropy_with_logits(logits_d, torch.ones_like(logits_d))
+        logits_adv = self.discriminator_network(stego)
+        loss_adv = F.binary_cross_entropy_with_logits(logits_adv, torch.ones_like(logits_adv))
 
         loss_cover = self.loss_fn(stego, cover)
         loss_secret = self.loss_fn(recovered, secret)
 
         beta, gamma = 1.0, 0.01
-        g_loss = loss_cover + beta * loss_secret + gamma * loss_d
+        g_loss = loss_cover + beta * loss_secret + gamma * loss_adv
 
         opt_g.zero_grad()
         self.manual_backward(g_loss)
@@ -146,7 +184,7 @@ class SteganographyModel(L.LightningModule):
         self.log("g_loss", g_loss)
         self.log("cover_loss", loss_cover)
         self.log("secret_loss", loss_secret)
-        self.log("adv_loss", loss_d)
+        self.log("adv_loss", loss_adv)
 
     def hide(self, batch):
         cover, secret = batch
@@ -158,16 +196,18 @@ class SteganographyModel(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         cover, secret = batch
-
+        
         stego = self.hiding_network(cover, secret)
         recovered = self.recovery_network(stego)
+
+        logits_adv = self.discriminator_network(stego)
+        loss_adv = F.binary_cross_entropy_with_logits(logits_adv, torch.ones_like(logits_adv))
 
         loss_cover = self.loss_fn(stego, cover)
         loss_secret = self.loss_fn(recovered, secret)
 
-        beta = 1.0
-
-        loss = loss_cover + beta*loss_secret
+        beta, gamma = 1.0, 0.01
+        loss = loss_cover + beta * loss_secret + gamma * loss_adv
 
         self.log(
             "val_loss",

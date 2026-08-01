@@ -2,6 +2,7 @@ import lightning as L
 from pathlib import Path
 from data import download_dataset, ImageDataModule
 from model import SteganographyModel, HidingNetwork, RecoveryNetwork, DiscriminatorNetwork
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 
 def train(path):
     dataset_path = download_dataset()
@@ -21,10 +22,24 @@ def train(path):
             discriminator_network=DiscriminatorNetwork()
         )
 
+    checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
+        mode="min",
+        save_top_k=1,
+        filename="best-{epoch}-{val_loss:.4f}"
+    )
+
+    early_stop_callback = EarlyStopping(
+        monitor="val_loss",
+        mode="min",
+        patience=5,
+        min_delta=0.001
+    )
 
     trainer = L.Trainer(
-        max_epochs=5,
-        accelerator="auto"
+        max_epochs=20,
+        accelerator="auto",
+        callbacks=[checkpoint_callback, early_stop_callback]
     )
     trainer.fit(model, datamodule=dm)
 
