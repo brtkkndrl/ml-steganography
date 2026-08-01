@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import torch
 from torchvision.utils import make_grid
 from data import download_dataset, ImageDataModule
-from model import SteganographyModel, HidingNetwork, RecoveryNetwork
+from model import SteganographyModel, HidingNetwork, RecoveryNetwork, DiscriminatorNetwork
 from pathlib import Path
 
 def evaluate(path):
@@ -13,7 +13,8 @@ def evaluate(path):
     model = SteganographyModel.load_from_checkpoint(
         path,
         hiding_network=HidingNetwork(),
-        recovery_network=RecoveryNetwork()
+        recovery_network=RecoveryNetwork(),
+        discriminator_network=DiscriminatorNetwork()
     )
     model.eval()
 
@@ -30,7 +31,7 @@ def evaluate(path):
     residual = (residual - residual.amin(dim=(1,2,3), keepdim=True)) / \
            (residual.amax(dim=(1,2,3), keepdim=True) - residual.amin(dim=(1,2,3), keepdim=True) + 1e-8)
 
-    titles = ["Cover", "Secret", "Container", "Recovered", "Residual x10"]
+    titles = ["Cover", "Secret", "Container", "Recovered", "Residual"]
     images = [cover, secret, container, recovered, residual]
 
     fig, axes = plt.subplots(4, 5, figsize=(10, 8))
