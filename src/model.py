@@ -3,32 +3,12 @@ import torch
 import lightning as L
 import torch.nn.functional as F
 
-# class PrepNetwork(nn.Module):
-#     def __init__(self, C_in=1, C_out=256):
-#         super().__init__()
-
-#         self.net = nn.Sequential(
-#             nn.Conv2d(C_in, 32, kernel_size=3, stride=2, padding=1), # 128 -> 64
-#             nn.ReLU(),
-
-#             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1), # 64 -> 32
-#             nn.ReLU(),
-
-#             nn.Conv2d(64, 128, kernel_size=3, padding=1),
-#             nn.ReLU(),
-
-#             nn.Conv2d(128, C_out, kernel_size=1),
-#         )
-
-#     def forward(self, x):
-#         return self.net(x)
-
 class HidingNetwork(nn.Module):
     def __init__(self):
         super().__init__()
 
-        C_secret_prep = 64
-        C_cover_prep = 64
+        C_secret_prep = 128
+        C_cover_prep = 128
 
         self.cover_prep_1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1), # 256 -> 128
@@ -80,6 +60,8 @@ class HidingNetwork(nn.Module):
 
         s = self.secret_prep_net(x_secret)  # 32x32xC_secret_prep
 
+        self.last_secret_prepped = s  # stash for sparsity loss
+
         x = torch.cat([c3, s], dim=1)
         x = self.decoder_1(x)               # 64x64x64
 
@@ -100,10 +82,10 @@ class RecoveryNetwork(nn.Module):
             nn.Conv2d(3, 96, 3, padding=1),
             nn.ReLU(),
 
-            nn.Conv2d(96, 96, 5, stride=2, padding=2),
+            nn.Conv2d(96, 96, 5, stride=2, padding=2),  # 256 -> 128
             nn.ReLU(),
 
-            nn.Conv2d(96, 64, 3, padding=1),
+            nn.Conv2d(96, 64, 3, padding=1),  # no stride, stays 128
             nn.ReLU(),
 
             nn.Conv2d(64, 1, 1),
@@ -148,6 +130,10 @@ class SteganographyModel(L.LightningModule):
         self.lr = lr
         self.automatic_optimization = False
 
+        self.beta = 1.0 # secret reconstruction loss coefficient
+        self.delta = 0.001
+        self.gamma = 0.0 # discriminator loss coefficient
+
     def training_step(self, batch, batch_idx):
         cover, secret = batch
         opt_g, opt_d = self.optimizers()
@@ -170,11 +156,17 @@ class SteganographyModel(L.LightningModule):
         logits_adv = self.discriminator_network(stego)
         loss_adv = F.binary_cross_entropy_with_logits(logits_adv, torch.ones_like(logits_adv))
 
-        loss_cover = self.loss_fn(stego, cover)
-        loss_secret = self.loss_fn(recovered, secret)
+        loss_cover_l2 = F.mse_loss(stego, cover)
+        loss_cover_l1 = F.l1_loss(stego, cover)
+        loss_cover = loss_cover_l2 + loss_cover_l1
 
-        beta, gamma = 1.0, 0.01
-        g_loss = loss_cover + beta * loss_secret + gamma * loss_adv
+        loss_secret_l2 = F.mse_loss(recovered, secret)
+        loss_secret_l1 = F.l1_loss(recovered, secret)
+        loss_secret = loss_secret_l2 + loss_secret_l1
+
+        loss_sparsity = self.hiding_network.last_secret_prepped.abs().mean()
+
+        g_loss = loss_cover + self.beta * loss_secret + self.gamma * loss_adv + self.delta * loss_sparsity
 
         opt_g.zero_grad()
         self.manual_backward(g_loss)
@@ -203,11 +195,18 @@ class SteganographyModel(L.LightningModule):
         logits_adv = self.discriminator_network(stego)
         loss_adv = F.binary_cross_entropy_with_logits(logits_adv, torch.ones_like(logits_adv))
 
-        loss_cover = self.loss_fn(stego, cover)
-        loss_secret = self.loss_fn(recovered, secret)
+        loss_cover_l2 = F.mse_loss(stego, cover)
+        loss_cover_l1 = F.l1_loss(stego, cover)
+        loss_cover = loss_cover_l2 + loss_cover_l1
+        
+        loss_secret_l2 = F.mse_loss(recovered, secret)
+        loss_secret_l1 = F.l1_loss(recovered, secret)
+        loss_secret = loss_secret_l2 + loss_secret_l1
 
-        beta, gamma = 1.0, 0.01
-        loss = loss_cover + beta * loss_secret + gamma * loss_adv
+        loss_sparsity = self.hiding_network.last_secret_prepped.abs().mean()
+
+        loss = loss_cover + self.beta * loss_secret + self.gamma * loss_adv + self.delta * loss_sparsity
+
 
         self.log(
             "val_loss",

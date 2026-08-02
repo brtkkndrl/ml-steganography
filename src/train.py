@@ -33,11 +33,11 @@ def train(path):
         monitor="val_loss",
         mode="min",
         patience=5,
-        min_delta=0.001
+        min_delta=0.0005
     )
 
     trainer = L.Trainer(
-        max_epochs=20,
+        max_epochs=50,
         accelerator="auto",
         callbacks=[checkpoint_callback, early_stop_callback]
     )
