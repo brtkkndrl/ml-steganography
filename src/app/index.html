@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Steganography Model Demo</title>
+<title>Steganography</title>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
 <script>
   ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/";
@@ -37,7 +37,7 @@
   .mode-toggle {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    margin: 1rem 0 1rem 0;
   }
 
   .mode-toggle button {
@@ -68,6 +68,7 @@
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
+    margin: 1rem 0 1rem 0;
   }
 
   button.run-button:disabled {
@@ -78,7 +79,7 @@
   #status {
     font-size: 0.8rem;
     color: var(--muted);
-    margin: 0.75rem 0 1.5rem 0;
+    margin: 1rem 0 1rem 0;
     white-space: pre-wrap;
   }
 
@@ -90,9 +91,8 @@
 
   .result-box {
     background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem;
+    /* border: 1px solid var(--border); */
+    border-radius: 0px;
     text-align: center;
     width: 300px;
   }
@@ -101,29 +101,32 @@
     display: block;
     font-size: 0.75rem;
     color: var(--text);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-bottom: 0.5rem;
+    /* text-transform: uppercase; */
+    /* margin: 0.5rem 0 0.5rem 0; */
+    padding: 1rem 0 1rem 0;
+    border: 1px solid black;
   }
 
   canvas {
     width: 100%;
     height: auto;
-    border-radius: 4px;
-    background: #000;
+    border-radius: 0px;
+    background: #ffffff;
     image-rendering: pixelated;
+    border: 1px solid black;
+    border-top: 0;
   }
 
   .hidden { display: none !important; }
 
   input[type="file"] {
-    margin: 10px;
+    margin: 1rem;
   }
 </style>
 </head>
 <body>
 
-  <h1>Steganography Model Demo</h1>
+  <h1>Steganography</h1>
 
   <hr>
 
@@ -149,15 +152,13 @@
   <!-- RECOVER mode inputs -->
   <div id="recoverInputs" class="inputs hidden">
     <div class="input-box">
-      <label for="containerInput">Container image</label>
+      <label for="containerInput">Container image:</label>
       <input type="file" id="containerInput" accept="image/*">
     </div>
   </div>
 
   <button id="hideRunButton" class="run-button" disabled>Hide secret in cover</button>
   <button id="recoverRunButton" class="run-button hidden" disabled>Recover secret</button>
-
-  <pre id="status">Loading models...</pre>
 
   <!-- HIDE mode results -->
   <div id="hideResults" class="results">
@@ -170,11 +171,11 @@
       <canvas id="secretCanvas" width="128" height="128"></canvas>
     </div>
     <div class="result-box">
-      <span>Container</span>
+      <span>Container (to save)</span>
       <canvas id="containerCanvas" width="256" height="256"></canvas>
     </div>
     <div class="result-box">
-      <span>Recovered secret</span>
+      <span>Recovered secret (preview)</span>
       <canvas id="recoveredCanvas" width="128" height="128"></canvas>
     </div>
   </div>
@@ -186,10 +187,12 @@
       <canvas id="containerOnlyCanvas" width="256" height="256"></canvas>
     </div>
     <div class="result-box">
-      <span>Recovered secret</span>
+      <span>Recovered secret (to save)</span>
       <canvas id="recoveredOnlyCanvas" width="128" height="128"></canvas>
     </div>
   </div>
+
+  <pre id="status">Loading models...</pre>
 
   <script>
     const COVER_SIZE = 256;
