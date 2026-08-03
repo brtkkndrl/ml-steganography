@@ -87,6 +87,30 @@ def evaluate_stats(model, dm):
     plt.savefig("eval_boxplots.png")
     plt.close()
 
+def export_onnx(model):
+    dummy_cover = torch.randn(1, 3, 256, 256)
+    dummy_secret = torch.randn(1, 1, 128, 128)
+
+    torch.onnx.export(
+        model.hiding_network,
+        (dummy_cover, dummy_secret),
+        "hiding_network.onnx",
+        input_names=["cover", "secret"],
+        output_names=["stego"],
+        opset_version=17
+    )
+
+    dummy_stego = torch.randn(1, 3, 256, 256)
+
+    torch.onnx.export(
+        model.recovery_network,
+        dummy_stego,
+        "recovery_network.onnx",
+        input_names=["stego"],
+        output_names=["recovered"],
+        opset_version=17
+    )
+
 if __name__ == "__main__":
     import argparse
 
@@ -107,5 +131,6 @@ if __name__ == "__main__":
 
     dm.setup()
 
-    evaluate_stats(model, dm)
-    evaluate(model, dm)
+    # evaluate_stats(model, dm)
+    # evaluate(model, dm)
+    export_onnx(model)

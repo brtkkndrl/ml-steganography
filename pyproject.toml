@@ -46,6 +46,7 @@ dependencies = [
     "nvidia-nvjitlink==13.3.33",
     "nvidia-nvshmem-cu13==3.4.5",
     "nvidia-nvtx==13.0.85",
+    "onnxscript>=0.7.1",
     "packaging==26.2",
     "pandas>=3.0.5",
     "pillow==12.3.0",
