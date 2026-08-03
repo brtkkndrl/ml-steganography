@@ -2,39 +2,464 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Steganography Model Loader</title>
+<title>Steganography Model Demo</title>
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
 <script>
   ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/";
 </script>
+<style>
+  :root {
+    --bg: #111318;
+    --panel: #181b22;
+    --border: #2a2e38;
+    --text: #e6e8ec;
+    --muted: #8b909c;
+    --accent: #5ec2a8;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 1.5rem 0;
+    color: var(--text);
+  }
+
+  .mode-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .mode-toggle button {
+    background: var(--panel);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .mode-toggle button.active {
+    background: var(--accent);
+    color: #0b1512;
+    border-color: var(--accent);
+  }
+
+  .inputs {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  .input-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    flex: 1;
+    min-width: 220px;
+  }
+
+  .input-box label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  input[type="file"] {
+    color: var(--text);
+    font-size: 0.85rem;
+    width: 100%;
+  }
+
+  button.run-button {
+    background: var(--accent);
+    color: #0b1512;
+    border: none;
+    border-radius: 6px;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  button.run-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  #status {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin: 0.75rem 0 1.5rem 0;
+    white-space: pre-wrap;
+  }
+
+  .results {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+  }
+
+  .result-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+  }
+
+  .result-box span {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.5rem;
+  }
+
+  canvas {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    background: #000;
+    image-rendering: pixelated;
+  }
+
+  .hidden { display: none !important; }
+</style>
 </head>
 <body>
-  <h1>Steganography ONNX Loader</h1>
-  <pre id="status">Loading...</pre>
+
+  <h1>Steganography Model Demo</h1>
+
+  <div class="mode-toggle">
+    <button id="hideModeButton" class="active">Hide</button>
+    <button id="recoverModeButton">Recover</button>
+  </div>
+
+  <!-- HIDE mode inputs -->
+  <div id="hideInputs" class="inputs">
+    <div class="input-box">
+      <label for="coverInput">Cover image</label>
+      <input type="file" id="coverInput" accept="image/*">
+    </div>
+    <div class="input-box">
+      <label for="secretInput">Secret image</label>
+      <input type="file" id="secretInput" accept="image/*">
+    </div>
+  </div>
+
+  <!-- RECOVER mode inputs -->
+  <div id="recoverInputs" class="inputs hidden">
+    <div class="input-box">
+      <label for="containerInput">Container image</label>
+      <input type="file" id="containerInput" accept="image/*">
+    </div>
+  </div>
+
+  <button id="hideRunButton" class="run-button" disabled>Hide secret in cover</button>
+  <button id="recoverRunButton" class="run-button hidden" disabled>Recover secret</button>
+
+  <pre id="status">Loading models...</pre>
+
+  <!-- HIDE mode results -->
+  <div id="hideResults" class="results">
+    <div class="result-box">
+      <span>Cover (256x256)</span>
+      <canvas id="coverCanvas" width="256" height="256"></canvas>
+    </div>
+    <div class="result-box">
+      <span>Secret (128x128, grayscale)</span>
+      <canvas id="secretCanvas" width="128" height="128"></canvas>
+    </div>
+    <div class="result-box">
+      <span>Container</span>
+      <canvas id="containerCanvas" width="256" height="256"></canvas>
+    </div>
+    <div class="result-box">
+      <span>Recovered secret</span>
+      <canvas id="recoveredCanvas" width="128" height="128"></canvas>
+    </div>
+  </div>
+
+  <!-- RECOVER mode results -->
+  <div id="recoverResults" class="results hidden">
+    <div class="result-box">
+      <span>Container (256x256)</span>
+      <canvas id="containerOnlyCanvas" width="256" height="256"></canvas>
+    </div>
+    <div class="result-box">
+      <span>Recovered secret</span>
+      <canvas id="recoveredOnlyCanvas" width="128" height="128"></canvas>
+    </div>
+  </div>
 
   <script>
+    const COVER_SIZE = 256;
+    const SECRET_SIZE = 128;
+
+    let hidingSession = null;
+    let recoverySession = null;
+
+    let coverImg = null;
+    let secretImg = null;
+    let containerImg = null;
+
+    let mode = "hide"; // "hide" | "recover"
+
+    const statusEl = document.getElementById("status");
+    const hideRunButton = document.getElementById("hideRunButton");
+    const recoverRunButton = document.getElementById("recoverRunButton");
+
+    const hideModeButton = document.getElementById("hideModeButton");
+    const recoverModeButton = document.getElementById("recoverModeButton");
+    const hideInputs = document.getElementById("hideInputs");
+    const recoverInputs = document.getElementById("recoverInputs");
+    const hideResults = document.getElementById("hideResults");
+    const recoverResults = document.getElementById("recoverResults");
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    function setMode(newMode) {
+      mode = newMode;
+
+      const isHide = mode === "hide";
+      hideModeButton.classList.toggle("active", isHide);
+      recoverModeButton.classList.toggle("active", !isHide);
+
+      hideInputs.classList.toggle("hidden", !isHide);
+      recoverInputs.classList.toggle("hidden", isHide);
+      hideResults.classList.toggle("hidden", !isHide);
+      recoverResults.classList.toggle("hidden", isHide);
+      hideRunButton.classList.toggle("hidden", !isHide);
+      recoverRunButton.classList.toggle("hidden", isHide);
+
+      checkReady();
+    }
+
     async function loadModels() {
-      const status = document.getElementById("status");
+      try {
+        hidingSession = await ort.InferenceSession.create("hiding_network.onnx");
+        recoverySession = await ort.InferenceSession.create("recovery_network.onnx");
+        setStatus("Models loaded. Select image(s) for the current mode.");
+      } catch (err) {
+        setStatus("Error loading models: " + err.message);
+        console.error(err);
+      }
+      checkReady();
+    }
+
+    // Draw a file's image into a canvas at target size (stretch to fit, no crop)
+    function drawImageToCanvas(file, canvas, size, grayscale) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, size, size);
+          ctx.drawImage(img, 0, 0, size, size);
+
+          if (grayscale) {
+            const imageData = ctx.getImageData(0, 0, size, size);
+            const d = imageData.data;
+            for (let i = 0; i < d.length; i += 4) {
+              const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+              d[i] = d[i + 1] = d[i + 2] = gray;
+            }
+            ctx.putImageData(imageData, 0, 0);
+          }
+
+          resolve();
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    // Canvas RGBA pixels -> normalized CHW float32 tensor (NCHW, values in [0,1])
+    function canvasToTensor(canvas, channels) {
+      const ctx = canvas.getContext("2d");
+      const { width, height } = canvas;
+      const imageData = ctx.getImageData(0, 0, width, height).data;
+
+      const data = new Float32Array(channels * width * height);
+      const plane = width * height;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const pixelIndex = y * width + x;
+
+          if (channels === 1) {
+            data[pixelIndex] = imageData[idx] / 255;
+          } else {
+            data[0 * plane + pixelIndex] = imageData[idx] / 255;
+            data[1 * plane + pixelIndex] = imageData[idx + 1] / 255;
+            data[2 * plane + pixelIndex] = imageData[idx + 2] / 255;
+          }
+        }
+      }
+
+      return new ort.Tensor("float32", data, [1, channels, height, width]);
+    }
+
+    // NCHW float32 tensor (values in [0,1]) -> draw into canvas
+    function tensorToCanvas(tensor, canvas) {
+      const [, channels, height, width] = tensor.dims;
+      const data = tensor.data;
+      const plane = width * height;
+
+      const ctx = canvas.getContext("2d");
+      canvas.width = width;
+      canvas.height = height;
+      const imageData = ctx.createImageData(width, height);
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const pixelIndex = y * width + x;
+          const outIdx = pixelIndex * 4;
+
+          let r, g, b;
+          if (channels === 1) {
+            const v = data[pixelIndex] * 255;
+            r = g = b = v;
+          } else {
+            r = data[0 * plane + pixelIndex] * 255;
+            g = data[1 * plane + pixelIndex] * 255;
+            b = data[2 * plane + pixelIndex] * 255;
+          }
+
+          imageData.data[outIdx] = Math.max(0, Math.min(255, r));
+          imageData.data[outIdx + 1] = Math.max(0, Math.min(255, g));
+          imageData.data[outIdx + 2] = Math.max(0, Math.min(255, b));
+          imageData.data[outIdx + 3] = 255;
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    async function runHide() {
+      hideRunButton.disabled = true;
+      setStatus("Running hiding network...");
 
       try {
-        const hidingSession = await ort.InferenceSession.create("hiding_network.onnx");
-        status.textContent += "\nhiding_network.onnx loaded";
-        console.log("Hiding network inputs:", hidingSession.inputNames);
-        console.log("Hiding network outputs:", hidingSession.outputNames);
+        const coverCanvas = document.getElementById("coverCanvas");
+        const secretCanvas = document.getElementById("secretCanvas");
+        const containerCanvas = document.getElementById("containerCanvas");
+        const recoveredCanvas = document.getElementById("recoveredCanvas");
 
-        const recoverySession = await ort.InferenceSession.create("recovery_network.onnx");
-        status.textContent += "\nrecovery_network.onnx loaded";
-        console.log("Recovery network inputs:", recoverySession.inputNames);
-        console.log("Recovery network outputs:", recoverySession.outputNames);
+        const coverTensor = canvasToTensor(coverCanvas, 3);
+        const secretTensor = canvasToTensor(secretCanvas, 1);
 
-        status.textContent += "\n\nBoth models loaded successfully.";
+        const hidingResult = await hidingSession.run({
+          cover: coverTensor,
+          secret: secretTensor
+        });
+        const stegoTensor = hidingResult[hidingSession.outputNames[0]];
+        tensorToCanvas(stegoTensor, containerCanvas);
+
+        setStatus("Running recovery network...");
+        const recoveryResult = await recoverySession.run({
+          stego: stegoTensor
+        });
+        const recoveredTensor = recoveryResult[recoverySession.outputNames[0]];
+        tensorToCanvas(recoveredTensor, recoveredCanvas);
+
+        setStatus("Done.");
       } catch (err) {
-        status.textContent += "\n\nError loading models: " + err.message;
+        setStatus("Error during inference: " + err.message);
         console.error(err);
+      } finally {
+        hideRunButton.disabled = false;
       }
     }
 
+    async function runRecover() {
+      recoverRunButton.disabled = true;
+      setStatus("Running recovery network...");
+
+      try {
+        const containerCanvas = document.getElementById("containerOnlyCanvas");
+        const recoveredCanvas = document.getElementById("recoveredOnlyCanvas");
+
+        const containerTensor = canvasToTensor(containerCanvas, 3);
+
+        const recoveryResult = await recoverySession.run({
+          stego: containerTensor
+        });
+        const recoveredTensor = recoveryResult[recoverySession.outputNames[0]];
+        tensorToCanvas(recoveredTensor, recoveredCanvas);
+
+        setStatus("Done.");
+      } catch (err) {
+        setStatus("Error during inference: " + err.message);
+        console.error(err);
+      } finally {
+        recoverRunButton.disabled = false;
+      }
+    }
+
+    function checkReady() {
+      if (mode === "hide") {
+        hideRunButton.disabled = !(coverImg && secretImg && hidingSession && recoverySession);
+      } else {
+        recoverRunButton.disabled = !(containerImg && recoverySession);
+      }
+    }
+
+    document.getElementById("coverInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      await drawImageToCanvas(file, document.getElementById("coverCanvas"), COVER_SIZE, false);
+      coverImg = file;
+      checkReady();
+    });
+
+    document.getElementById("secretInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      await drawImageToCanvas(file, document.getElementById("secretCanvas"), SECRET_SIZE, true);
+      secretImg = file;
+      checkReady();
+    });
+
+    document.getElementById("containerInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      await drawImageToCanvas(file, document.getElementById("containerOnlyCanvas"), COVER_SIZE, false);
+      containerImg = file;
+      checkReady();
+    });
+
+    hideRunButton.addEventListener("click", runHide);
+    recoverRunButton.addEventListener("click", runRecover);
+
+    hideModeButton.addEventListener("click", () => setMode("hide"));
+    recoverModeButton.addEventListener("click", () => setMode("recover"));
+
     loadModels();
   </script>
+
 </body>
 </html>
