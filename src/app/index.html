@@ -9,12 +9,12 @@
 </script>
 <style>
   :root {
-    --bg: #111318;
-    --panel: #181b22;
+    --bg: #ffffff;
+    --panel: #ffffff;
     --border: #2a2e38;
-    --text: #e6e8ec;
-    --muted: #8b909c;
-    --accent: #5ec2a8;
+    --text: #000000;
+    --muted: #c4c4c4;
+    --accent: #2184ee;
   }
 
   * { box-sizing: border-box; }
@@ -59,37 +59,6 @@
     border-color: var(--accent);
   }
 
-  .inputs {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
-  }
-
-  .input-box {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem;
-    flex: 1;
-    min-width: 220px;
-  }
-
-  .input-box label {
-    display: block;
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  input[type="file"] {
-    color: var(--text);
-    font-size: 0.85rem;
-    width: 100%;
-  }
-
   button.run-button {
     background: var(--accent);
     color: #0b1512;
@@ -125,12 +94,13 @@
     border-radius: 8px;
     padding: 0.75rem;
     text-align: center;
+    width: 300px;
   }
 
   .result-box span {
     display: block;
     font-size: 0.75rem;
-    color: var(--muted);
+    color: var(--text);
     text-transform: uppercase;
     letter-spacing: 0.03em;
     margin-bottom: 0.5rem;
@@ -145,25 +115,33 @@
   }
 
   .hidden { display: none !important; }
+
+  input[type="file"] {
+    margin: 10px;
+  }
 </style>
 </head>
 <body>
 
   <h1>Steganography Model Demo</h1>
 
+  <hr>
+
   <div class="mode-toggle">
     <button id="hideModeButton" class="active">Hide</button>
     <button id="recoverModeButton">Recover</button>
   </div>
 
+    <hr>
+
   <!-- HIDE mode inputs -->
   <div id="hideInputs" class="inputs">
     <div class="input-box">
-      <label for="coverInput">Cover image</label>
+      <label for="coverInput">Cover image:</label>
       <input type="file" id="coverInput" accept="image/*">
     </div>
     <div class="input-box">
-      <label for="secretInput">Secret image</label>
+      <label for="secretInput">Secret image:</label>
       <input type="file" id="secretInput" accept="image/*">
     </div>
   </div>
