@@ -6,8 +6,9 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 
 def train(path):
     dataset_path = download_dataset()
-    dm = ImageDataModule(path=Path(dataset_path) / "imagenet", batch_size=16,
-                         train_limit=4000, val_limit=1000)
+    print(dataset_path)
+    dm = ImageDataModule(path=Path(dataset_path) / "images", batch_size=16,
+                         train_size=20_000, val_size=2000, test_size=2000)
     if path is None:
         model = SteganographyModel(
             hiding_network=HidingNetwork(),

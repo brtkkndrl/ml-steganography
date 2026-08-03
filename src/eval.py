@@ -8,7 +8,7 @@ import numpy as np
 from torchmetrics.functional.image import peak_signal_noise_ratio as psnr, multiscale_structural_similarity_index_measure as mssim
 
 def evaluate(model, dm):
-    cover, secret = next(iter(dm.train_dataloader()))
+    cover, secret = next(iter(dm.test_dataloader()))
 
     cover = cover[:4].to(model.device)
     secret = secret[:4].to(model.device)
@@ -43,7 +43,7 @@ def evaluate_stats(model, dm):
     cover_psnr_vals, cover_msssim_vals, secret_psnr_vals = [], [], []
 
     with torch.no_grad():
-        for cover, secret in dm.val_dataloader():
+        for cover, secret in dm.test_dataloader():
             cover = cover.to(model.device)
             secret = secret.to(model.device)
 
@@ -67,6 +67,25 @@ def evaluate_stats(model, dm):
     report("Cover MS-SSIM", cover_msssim_vals)
     report("Secret PSNR", secret_psnr_vals)
 
+    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
+
+    psnr_min = min(np.min(cover_psnr_vals), np.min(secret_psnr_vals))
+    psnr_max = max(np.max(cover_psnr_vals), np.max(secret_psnr_vals))
+
+    axes[0].boxplot(secret_psnr_vals)
+    axes[0].set_title("Secret PSNR")
+    axes[0].set_ylim(psnr_min, psnr_max)
+
+    axes[1].boxplot(cover_psnr_vals)
+    axes[1].set_title("Cover PSNR")
+    axes[1].set_ylim(psnr_min, psnr_max)
+
+    axes[2].boxplot(cover_msssim_vals)
+    axes[2].set_title("Cover MS-SSIM")
+
+    plt.tight_layout()
+    plt.savefig("eval_boxplots.png")
+    plt.close()
 
 if __name__ == "__main__":
     import argparse
@@ -76,8 +95,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dataset_path = download_dataset()
-    dm = ImageDataModule(path=Path(dataset_path) / "imagenet", batch_size=16,
-                              train_limit=2000, val_limit=1000)
+    dm = ImageDataModule(path=Path(dataset_path) / "images", batch_size=16,
+                         train_size=20_000, val_size=2000, test_size=2000)
     
     model = SteganographyModel.load_from_checkpoint(
         args.path,
