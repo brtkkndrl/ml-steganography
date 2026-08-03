@@ -48,13 +48,13 @@ class ImageDataModule(L.LightningDataModule):
         self.val_limit = val_limit
 
         self.cover_transform = transforms.Compose([
-            transforms.Resize(cover_size), # TODO not sure
+            transforms.Resize(cover_size),
             transforms.RandomCrop((cover_size, cover_size)),
             transforms.ToTensor(),
         ])
 
         self.secret_transform = transforms.Compose([
-            transforms.Resize(secret_size), # TODO not sure
+            transforms.Resize(secret_size),
             transforms.RandomCrop((secret_size, secret_size)),
             transforms.Grayscale(num_output_channels=1),
             transforms.ToTensor(),

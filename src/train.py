@@ -1,7 +1,7 @@
 import lightning as L
 from pathlib import Path
 from data import download_dataset, ImageDataModule
-from model import SteganographyModel, HidingNetwork, RecoveryNetwork, DiscriminatorNetwork
+from model import SteganographyModel, HidingNetwork, RecoveryNetwork
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 
 def train(path):
@@ -11,15 +11,13 @@ def train(path):
     if path is None:
         model = SteganographyModel(
             hiding_network=HidingNetwork(),
-            recovery_network=RecoveryNetwork(),
-            discriminator_network=DiscriminatorNetwork()
+            recovery_network=RecoveryNetwork()
         )
     else:
         model = SteganographyModel.load_from_checkpoint(
             path,
             hiding_network=HidingNetwork(),
-            recovery_network=RecoveryNetwork(),
-            discriminator_network=DiscriminatorNetwork()
+            recovery_network=RecoveryNetwork()
         )
 
     checkpoint_callback = ModelCheckpoint(

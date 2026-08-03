@@ -2,25 +2,12 @@ import matplotlib.pyplot as plt
 import torch
 from torchvision.utils import make_grid
 from data import download_dataset, ImageDataModule
-from model import SteganographyModel, HidingNetwork, RecoveryNetwork, DiscriminatorNetwork
+from model import SteganographyModel, HidingNetwork, RecoveryNetwork
 from pathlib import Path
 import numpy as np
 from torchmetrics.functional.image import peak_signal_noise_ratio as psnr, multiscale_structural_similarity_index_measure as mssim
 
-def evaluate(path):
-    dataset_path = download_dataset()
-    dm = ImageDataModule(path=Path(dataset_path) / "imagenet", batch_size=16,
-                              train_limit=2000, val_limit=1000)
-    
-    model = SteganographyModel.load_from_checkpoint(
-        path,
-        hiding_network=HidingNetwork(),
-        recovery_network=RecoveryNetwork(),
-        discriminator_network=DiscriminatorNetwork()
-    )
-    model.eval()
-
-    dm.setup()
+def evaluate(model, dm):
     cover, secret = next(iter(dm.train_dataloader()))
 
     cover = cover[:4].to(model.device)
@@ -52,21 +39,7 @@ def evaluate(path):
     plt.tight_layout()
     plt.show()
 
-def evaluate_stats(path):
-    dataset_path = download_dataset()
-    dm = ImageDataModule(path=Path(dataset_path) / "imagenet", batch_size=16,
-                          train_limit=2000, val_limit=1000)
-
-    model = SteganographyModel.load_from_checkpoint(
-        path,
-        hiding_network=HidingNetwork(),
-        recovery_network=RecoveryNetwork(),
-        discriminator_network=DiscriminatorNetwork()
-    )
-    model.eval()
-
-    dm.setup()
-
+def evaluate_stats(model, dm):
     cover_psnr_vals, cover_msssim_vals, secret_psnr_vals = [], [], []
 
     with torch.no_grad():
@@ -102,5 +75,18 @@ if __name__ == "__main__":
     parser.add_argument("--path", type=str, required=True)
     args = parser.parse_args()
 
-    # evaluate(args.path)
-    evaluate_stats(args.path)
+    dataset_path = download_dataset()
+    dm = ImageDataModule(path=Path(dataset_path) / "imagenet", batch_size=16,
+                              train_limit=2000, val_limit=1000)
+    
+    model = SteganographyModel.load_from_checkpoint(
+        args.path,
+        hiding_network=HidingNetwork(),
+        recovery_network=RecoveryNetwork()
+    )
+    model.eval()
+
+    dm.setup()
+
+    evaluate_stats(model, dm)
+    evaluate(model, dm)

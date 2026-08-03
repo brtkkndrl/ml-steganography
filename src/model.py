@@ -7,7 +7,7 @@ class HidingNetwork(nn.Module):
     def __init__(self):
         super().__init__()
 
-        C_secret_prep = 128
+        C_secret_prep = 64
         C_cover_prep = 128
 
         self.cover_prep_1 = nn.Sequential(
@@ -60,8 +60,6 @@ class HidingNetwork(nn.Module):
 
         s = self.secret_prep_net(x_secret)  # 32x32xC_secret_prep
 
-        self.last_secret_prepped = s  # stash for sparsity loss
-
         x = torch.cat([c3, s], dim=1)
         x = self.decoder_1(x)               # 64x64x64
 
@@ -72,7 +70,6 @@ class HidingNetwork(nn.Module):
         x = self.decoder_3(x)               # 256x256x3
 
         return x
-
 
 class RecoveryNetwork(nn.Module):
     def __init__(self):
@@ -95,92 +92,44 @@ class RecoveryNetwork(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class DiscriminatorNetwork(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        self.net = nn.Sequential(
-            nn.Conv2d(3, 32, 3, stride=2, padding=1),   # 256 -> 128
-            nn.LeakyReLU(0.2),
-
-            nn.Conv2d(32, 64, 3, stride=2, padding=1),  # 128 -> 64
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(0.2),
-
-            nn.Conv2d(64, 128, 3, stride=2, padding=1), # 64 -> 32
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2),
-
-            nn.Conv2d(128, 1, 3, stride=1, padding=1),  # patch-level real/fake logits
-        )
-
-    def forward(self, x):
-        return self.net(x)  # returns a spatial map of logits, not a single scalar
-
-
 class SteganographyModel(L.LightningModule):
-    def __init__(self, hiding_network, recovery_network, discriminator_network, lr=1e-4):
+    def __init__(self, hiding_network, recovery_network, lr=1e-4):
         super().__init__()
 
         self.hiding_network = hiding_network
         self.recovery_network = recovery_network
-        self.discriminator_network = discriminator_network
 
         self.loss_fn = nn.MSELoss()
         self.lr = lr
-        self.automatic_optimization = False
 
-        self.beta = 1.0 # secret reconstruction loss coefficient
-        self.delta = 0.001
-        self.gamma = 0.0 # discriminator loss coefficient
+        self.beta = 0.5   # secret reconstruction loss coefficient
+        self.delta = 1.5  # L1 coefficient
 
     def training_step(self, batch, batch_idx):
         cover, secret = batch
-        opt_g, opt_d = self.optimizers()
 
         stego = self.hiding_network(cover, secret)
         recovered = self.recovery_network(stego)
 
-        # Discriminator step
-        real_logits = self.discriminator_network(cover)
-        fake_logits = self.discriminator_network(stego.detach())
-        d_loss = F.binary_cross_entropy_with_logits(real_logits, torch.ones_like(real_logits)) + \
-                F.binary_cross_entropy_with_logits(fake_logits, torch.zeros_like(fake_logits))
-        d_loss = d_loss / 2
-
-        opt_d.zero_grad()
-        self.manual_backward(d_loss)
-        opt_d.step()
-
-        # Generator step
-        logits_adv = self.discriminator_network(stego)
-        loss_adv = F.binary_cross_entropy_with_logits(logits_adv, torch.ones_like(logits_adv))
-
         loss_cover_l2 = F.mse_loss(stego, cover)
         loss_cover_l1 = F.l1_loss(stego, cover)
-        loss_cover = loss_cover_l2 + loss_cover_l1
+        loss_cover = loss_cover_l2 + self.delta * loss_cover_l1
 
         loss_secret_l2 = F.mse_loss(recovered, secret)
         loss_secret_l1 = F.l1_loss(recovered, secret)
-        loss_secret = loss_secret_l2 + loss_secret_l1
+        loss_secret = loss_secret_l2 + self.delta * loss_secret_l1
 
-        loss_sparsity = self.hiding_network.last_secret_prepped.abs().mean()
+        loss = loss_cover + self.beta * loss_secret
 
-        g_loss = loss_cover + self.beta * loss_secret + self.gamma * loss_adv + self.delta * loss_sparsity
-
-        opt_g.zero_grad()
-        self.manual_backward(g_loss)
-        opt_g.step()
-
-        self.log("d_loss", d_loss)
-        self.log("g_loss", g_loss)
+        self.log("train_loss", loss)
         self.log("cover_loss", loss_cover)
         self.log("secret_loss", loss_secret)
-        self.log("adv_loss", loss_adv)
+
+        return loss
 
     def hide(self, batch):
         cover, secret = batch
-        
+
         stego = self.hiding_network(cover, secret)
         recovered = self.recovery_network(stego)
 
@@ -188,43 +137,28 @@ class SteganographyModel(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         cover, secret = batch
-        
+
         stego = self.hiding_network(cover, secret)
         recovered = self.recovery_network(stego)
 
-        logits_adv = self.discriminator_network(stego)
-        loss_adv = F.binary_cross_entropy_with_logits(logits_adv, torch.ones_like(logits_adv))
-
         loss_cover_l2 = F.mse_loss(stego, cover)
         loss_cover_l1 = F.l1_loss(stego, cover)
-        loss_cover = loss_cover_l2 + loss_cover_l1
-        
+        loss_cover = loss_cover_l2 + self.delta * loss_cover_l1
+
         loss_secret_l2 = F.mse_loss(recovered, secret)
         loss_secret_l1 = F.l1_loss(recovered, secret)
-        loss_secret = loss_secret_l2 + loss_secret_l1
+        loss_secret = loss_secret_l2 + self.delta * loss_secret_l1
 
-        loss_sparsity = self.hiding_network.last_secret_prepped.abs().mean()
+        loss = loss_cover + self.beta * loss_secret
 
-        loss = loss_cover + self.beta * loss_secret + self.gamma * loss_adv + self.delta * loss_sparsity
-
-
-        self.log(
-            "val_loss",
-            loss,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True
-        )
-
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_cover_loss", loss_cover, on_step=False, on_epoch=True)
         self.log("val_secret_loss", loss_secret, on_step=False, on_epoch=True)
 
         return loss
 
     def configure_optimizers(self):
-        opt_g = torch.optim.Adam(
+        return torch.optim.Adam(
             list(self.hiding_network.parameters()) + list(self.recovery_network.parameters()),
             lr=self.lr
         )
-        opt_d = torch.optim.Adam(self.discriminator_network.parameters(), lr=self.lr)
-        return [opt_g, opt_d]
