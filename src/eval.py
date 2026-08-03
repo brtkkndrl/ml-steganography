@@ -131,6 +131,6 @@ if __name__ == "__main__":
 
     dm.setup()
 
-    # evaluate_stats(model, dm)
-    # evaluate(model, dm)
+    evaluate_stats(model, dm)
+    evaluate(model, dm)
     export_onnx(model)

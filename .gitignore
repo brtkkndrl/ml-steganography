@@ -1,5 +1,4 @@
 *.onnx
-*.png
 lightning_logs/
 
 # Byte-compiled / optimized / DLL files
