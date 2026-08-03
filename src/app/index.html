@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Steganography Model Loader</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
+<script>
+  ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/";
+</script>
+</head>
+<body>
+  <h1>Steganography ONNX Loader</h1>
+  <pre id="status">Loading...</pre>
+
+  <script>
+    async function loadModels() {
+      const status = document.getElementById("status");
+
+      try {
+        const hidingSession = await ort.InferenceSession.create("hiding_network.onnx");
+        status.textContent += "\nhiding_network.onnx loaded";
+        console.log("Hiding network inputs:", hidingSession.inputNames);
+        console.log("Hiding network outputs:", hidingSession.outputNames);
+
+        const recoverySession = await ort.InferenceSession.create("recovery_network.onnx");
+        status.textContent += "\nrecovery_network.onnx loaded";
+        console.log("Recovery network inputs:", recoverySession.inputNames);
+        console.log("Recovery network outputs:", recoverySession.outputNames);
+
+        status.textContent += "\n\nBoth models loaded successfully.";
+      } catch (err) {
+        status.textContent += "\n\nError loading models: " + err.message;
+        console.error(err);
+      }
+    }
+
+    loadModels();
+  </script>
+</body>
+</html>
