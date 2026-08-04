@@ -10,8 +10,8 @@ from torchmetrics.functional.image import peak_signal_noise_ratio as psnr, multi
 def evaluate(model, dm):
     cover, secret = next(iter(dm.test_dataloader()))
 
-    cover = cover[:4].to(model.device)
-    secret = secret[:4].to(model.device)
+    cover = cover[10:13].to(model.device)
+    secret = secret[10:13].to(model.device)
 
     with torch.no_grad():
         container, recovered = model.hide((cover, secret))
@@ -23,10 +23,10 @@ def evaluate(model, dm):
     titles = ["Cover", "Secret", "Container", "Recovered", "Residual"]
     images = [cover, secret, container, recovered, residual]
 
-    fig, axes = plt.subplots(4, 5, figsize=(10, 8))
+    fig, axes = plt.subplots(3, 5, figsize=(10, 8))
 
     for col, (title, batch) in enumerate(zip(titles, images)):
-        for row in range(4):
+        for row in range(3):
             img = batch[row].detach().cpu().permute(1, 2, 0).clamp(0, 1)
             if img.shape[-1] == 1:
                 axes[row, col].imshow(img.squeeze(-1), cmap="gray")
