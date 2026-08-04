@@ -88,8 +88,10 @@ def evaluate_stats(model, dm):
     plt.close()
 
 def export_onnx(model):
-    dummy_cover = torch.randn(1, 3, 256, 256)
-    dummy_secret = torch.randn(1, 1, 128, 128)
+    device = next(model.hiding_network.parameters()).device
+
+    dummy_cover = torch.randn(1, 3, 256, 256, device=device)
+    dummy_secret = torch.randn(1, 1, 128, 128, device=device)
 
     torch.onnx.export(
         model.hiding_network,
@@ -97,10 +99,11 @@ def export_onnx(model):
         "hiding_network.onnx",
         input_names=["cover", "secret"],
         output_names=["stego"],
-        opset_version=17
+        opset_version=17,
+        dynamo=False
     )
 
-    dummy_stego = torch.randn(1, 3, 256, 256)
+    dummy_stego = torch.randn(1, 3, 256, 256, device=device)
 
     torch.onnx.export(
         model.recovery_network,
@@ -108,7 +111,8 @@ def export_onnx(model):
         "recovery_network.onnx",
         input_names=["stego"],
         output_names=["recovered"],
-        opset_version=17
+        opset_version=17,
+        dynamo=False
     )
 
 if __name__ == "__main__":

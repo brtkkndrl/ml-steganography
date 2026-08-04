@@ -31,12 +31,12 @@ def train(path):
     early_stop_callback = EarlyStopping(
         monitor="val_loss",
         mode="min",
-        patience=5,
+        patience=3,
         min_delta=0.0005
     )
 
     trainer = L.Trainer(
-        max_epochs=50,
+        max_epochs=75,
         accelerator="auto",
         callbacks=[checkpoint_callback, early_stop_callback]
     )
