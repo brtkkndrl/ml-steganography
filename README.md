@@ -10,7 +10,7 @@ https://brtkkndrl.github.io/ml-steganography/
 
 ![boxplot](img/grid.png)
 
-![boxplot](img/eval_boxplots.png)
+![boxplot](img/boxplots.png)
 
 ### Training
 
